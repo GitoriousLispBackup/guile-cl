@@ -406,7 +406,7 @@
 	  (lambda (fail cc)
 	    (if f3-up
 		#`(catch #t
-			 (lambda () (set! #,v (#,f3-up #,v)) #,cc)
+			 (lambda () (set! #,v (+ #,f3-up #,v)) #,cc)
 			 (lambda z (#,fail)))
 		#`(begin (set! #,v (+ #,v 1)) #,cc))))
 
@@ -437,7 +437,7 @@
 	  (lambda (fail cc)
 	    (if f3
 		#`(catch #t
-			 (lambda () (set! #,v (#,f3 #,v)) #,cc)
+			 (lambda () (set! #,v (- #,v #,f3)) #,cc)
 			 (lambda z (#,fail)))
 		#`(begin (set! #,v (- #,v 1)) #,cc))))
 
@@ -473,7 +473,7 @@
 	  (lambda (fail cc)
 	    (if f3
 		#`(catch #t
-			 (lambda () (set! #,v (#,f3 #,v)) #,cc)
+			 (lambda () (set! #,v (- #,v #,f3)) #,cc)
 			 (lambda z (#,fail)))
 		#`(begin (set! #,v (- #,v 1)) #,cc))))
 
