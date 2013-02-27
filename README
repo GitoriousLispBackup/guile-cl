@@ -1,0 +1,6 @@
+Library for guile-2.0
+
+Add this directory to the load-path in guile
+
+The utilities defined in thes package are
+* (compat cl for) - depends on guile-syntax-parse
