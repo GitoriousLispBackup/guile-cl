@@ -653,11 +653,13 @@
 	  (it    (datum->syntax x (gensym "it"))))
 	 #`(let ()
 	     #,(nm.code
-		(1-apply (append v.init m.init (fluid-ref *initially*))
+		(1-apply (append v.init m.init (reverse 
+						(fluid-ref *initially*)))
 		  #`(letrec 
 			((final 
 			  (lambda () 
-			    #,(1-apply (append (fluid-ref *finally*) m.end)
+			    #,(1-apply (append (reverse
+						(fluid-ref *finally*)) m.end)
 				       #t)))
 			 (loop  
 			  (lambda () 
