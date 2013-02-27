@@ -1,0 +1,5 @@
+GNU Lesser General Public License (LGPL) version 2 or higher
+
+Copyright Stefan Israelsson Tampe 2013 -
+
+See "COPYING.LIB" for more information about the license.
