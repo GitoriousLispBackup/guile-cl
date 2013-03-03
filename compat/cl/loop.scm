@@ -3,6 +3,9 @@
   #:use-module (ice-9 match)
   #:export     (loop return return-from))
 
+(define-syntax-parameter *list-end-test* 
+  (syntax-rules () ((_ x) (pair? x))))
+
 (define *initially* (make-fluid '()))
 (define *finally*   (make-fluid '()))
 
@@ -503,7 +506,7 @@
 	     #:attr body 
 	     (lambda (fail cc) 
 	       #`(let loop ()
-		   (if (pair? li)
+		   (if (*list-end-test* li)
 		       (match car-li
 			      (v #,cc)
 			      (_ #,(update fail)))
@@ -526,22 +529,21 @@
 	     #:with s (stx-gen #'v "iter")
 	     #:attr init 
 	     (lambda (cc)
-	       #`(let ((s f1)) #,cc))
+	       #`(let ((v f1)) #,cc))
 	     
 	     #:attr body
-	     (lambda (fail cc)
-	       #`(let ((v s)) #,cc))
+	     (lambda (fail cc) cc)
 
 	     #:attr inc
 	     (lambda (fail cc)
 	       (if f2
-		   #`(begin (set! s #,f2) #,cc)
+		   #`(begin (set! v #,f2) #,cc)
 		   cc))
 
 	     #:attr end  
 	     (lambda (x) x)))
 
-
+  (define-syntax-rule (mk-seq for-as-across across generalized-vector-length generalized-vector-ref)
   (define-splicing-syntax-class for-as-across
     (pattern (~seq v (~datum across) ~! f1)
 	     #:with ar   (stx-gen #'v "array")
@@ -567,8 +569,8 @@
 	     (lambda (fail cc)
 	       #`(begin (set! ar-i (+ ar-i 1)) #,cc))
 
-	     #:attr end  (lambda (x) x)))
-  
+	     #:attr end  (lambda (x) x))))
+  (mk-seq for-as-across across generalized-vector-length generalized-vector-ref)
 
   (define-splicing-syntax-class for-as-hash
     (pattern (~seq v (~datum being)
