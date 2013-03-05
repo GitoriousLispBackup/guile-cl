@@ -2,7 +2,7 @@
   #:use-module (syntax parse)
   #:use-module (syntax parse debug)
   #:use-module (ice-9 match)
-  #:export     (debug-loop loop return return-from))
+  #:export     (debug-loop loop return return-from it))
 
 (define-syntax-parameter *list-end-test* 
   (syntax-rules () ((_ x) (pair? x))))
@@ -45,14 +45,19 @@
   (define newvars '())
   (define (get-pat stx)
     (let loop ((stx stx))
-      (syntax-case stx (quote and or not ? = _)
+      (syntax-case stx (quote and or not ? = _ $ vector)
 	((x . l)
-	 (eq? (syntax->datum #'x) '...)
+	 (let ((n (syntax->datum #'x)))
+	   (member n '(... ___ ..1 ***)))
 	 #`(x ,@(loop #'l)))
 	((and . l)
 	 #`(and #,@(loop #'l)))
 	((or  . l)
 	 #`(or #,@(loop #'l)))
+	(($ n l ...)
+	 #`($ n #,@(map loop #'(l ...))))
+	((vector l ...)
+	 #`(vector #,@(map loop #'(l ...))))
 	((not  l)
 	 #`(not #,(loop #'l)))
 	((quote l)
@@ -81,6 +86,7 @@
     (lambda () x)
     (lambda y (fail))))
 
+;; return utility
 (define tag (make-prompt-tag))
 (define-syntax-parameter S (lambda x #'tag))
 (define-syntax-rule (return . l)
@@ -95,6 +101,19 @@
    (call-with-prompt S
       (lambda () code)
       (lambda x  codef))))
+
+;; it utilitiy
+(define-syntax-parameter it 
+  (lambda x (error "compat cl loop it cannot be used outside loop")))
+(define-syntax with-it
+  (lambda (x)
+    (syntax-case x ()
+    ((_ code ...)
+     (with-syntax ((s (datum->syntax #'1 
+				     (gensym "it"))))
+          #'(syntax-parameterize ((it (lambda (x) #'s))) code ...))))))
+
+    
 
 ;; termination utilities
 (define-syntax-parameter T
@@ -112,6 +131,7 @@
 		 (lambda () code)
 		 (lambda x  codef))))))))
 
+;; start utility
 (define-syntax-parameter Start
   (lambda (x) (error "Start syntax parameter can only be used in loop macro")))
 (define-syntax with-start
@@ -121,6 +141,12 @@
      (with-syntax ((s (datum->syntax #'1 
 				     (gensym "Start"))))
           #'(syntax-parameterize ((Start (lambda (x) #'s))) code ...))))))
+
+;; end utility
+(define (with-end stx a _ b)
+  (syntax-case stx (if)
+    ((if #f #f) a)
+    (_          b)))
 
 (begin
   (define-syntax-class compound-form
@@ -148,10 +174,10 @@
 		   (apply values l)))))))
 
   (define-splicing-syntax-class main-clause
-    (pattern (~or x:unconditional
+    (pattern (~or x:termination-test
+		  x:unconditional
 		  x:accumulation
 		  x:conditional
-		  x:termination-test
 		  x:initial-final)
        #:attr init x.init
        #:attr body x.body
@@ -194,16 +220,17 @@
 			      (~datum appending)
 			      (~datum nconc)
 			      (~datum nconcing))) ~!
-		  (~and q (~or (~datum it) x))
-		  (~optional (~seq (~datum into) ~! v)) ...)
+		    x
+		    (~optional (~seq (~datum into) ~! v)) ...)
 	     
-	     #:with acc  (datum->syntax #'x (gensym "acc"))
+	     #:with acc  (stx-gen #'1 "acc")
+	     #:with X    #'x
 	     #:with var  (if v v #'acc)	     		
 	     #:attr init (lambda (cc) 
 			   #`(let ((var '())) #,cc))
 	     
 	     #:attr body (lambda (cc)
-			   #`(begin (set! var (cons q var))
+			   #`(begin (set! var (cons X var))
 				      #,cc))
 
 	     #:attr inc (lambda (cc) cc)
@@ -216,10 +243,11 @@
 					   #'(append-all var))
 					  ((nconc nconcing)
 					   #'(append-all! var)))))
-			     (if (not (eq? cc #t))
-				 #`(begin (set! var #,final) 
-					  #,cc)
-				 final)))))
+			     (with-end cc 
+				       final
+				       #:else
+				       #`(begin (set! var #,final) 
+						#,cc))))))
   
 
   (define-splicing-syntax-class numeric-accumulation
@@ -235,7 +263,7 @@
 		   (~optional (~seq (~datum into) ~! v:id)) ...)
 	   #:with X0 (stx-gen #'1 "x0")
 	   #:with X  (if v v #'X0)
-
+	   #:with Y  #'x
 	   #:attr init 
 	   (lambda (cc) 
 	     #`(let  ((X #,(case (D #'type)
@@ -252,18 +280,21 @@
 	       ((count counting)
 		#`(begin (when x (set! X (+ X 1))) #,cc))
 	       ((sum summing)
-		#`(begin (set! X (+ X x)) #,cc))
+		#`(begin (set! X (+ X Y)) #,cc))
 	       ((maximize maximizing)
-		#`(begin (when (> x X) (set! X x)) #,cc))
+		#`(begin (when (> Y X) (set! X x)) #,cc))
 	       ((minimize minimizing)
-		#`(begin (when (< x X) (set! X x)) #,cc))))
+		#`(begin (when (< Y X) (set! X x)) #,cc))))
 
 	   #:attr inc (lambda (cc) cc)
 	   #:attr end 
 	   (lambda (cc)
-	     (if (eq? cc #f) #'X cc))))
-		 
-  
+	     (with-end cc #'X #:else cc))))
+
+  (define-syntax sif
+    (syntax-rules (unless)
+      ((_ unless a b c) (if a c b))
+      ((_ _      a b c) (if a b c))))
 
   (define-splicing-syntax-class conditional
     (pattern (~seq (~and type 
@@ -286,12 +317,12 @@
 	     #:attr body (lambda (cc)
 			   #`(let ((it f))
 			       #,(if e.body
-				     #`(if it
+				     #`(sif type it
 					   #,(1-apply 
 					      (cons xsel.body xs.body) cc)
 					   #,(1-apply 
 					      (cons e.body    es.body) cc))
-				     #`(if it 
+				     #`(sif type it 
 					   #,(1-apply (cons xsel.body xs.body) 
 						      cc)
 					   #,cc))))
@@ -334,7 +365,7 @@
 			 (else cc)))
 
 	 #:attr body (lambda (cc)
-		       (case (syntax->datum #'type)
+		       (case (D #'type)
 			 ((while)
 			  #`(if f1 #,cc (finish)))
 			 ((until)
@@ -344,14 +375,18 @@
 				(begin (set! i (+ i 1)) #,cc) 
 				(finish)))
 			 ((always)
-			  #`(if f1 #,cc (return-from S #f)))
+			  #`(let ((it f1)) (if it #,cc (return-from S #f))))
 			 ((never)
-			  #`(if f1 (return-from S #f) #,cc))
+			  #`(let ((it f1)) (if it (return-from S #f) #,cc)))
 			 ((thereis)
-			  #`(let ((q f1)) (if q (return-from S q) #,cc)))))
+			  #`(let ((it f1)) (if it (return-from S it) #,cc)))))
 
 	 #:attr inc  (lambda (cc) cc)
-	 #:attr end  (lambda (x) x)))
+	 #:attr end  (lambda (cc)
+		       (case (D #'type)
+			 ((while until repeat) cc)
+			 ((always never)       (with-end cc #t #:else cc))
+			 ((thereis)            (with-end cc #f #:else cc))))))
 
 
   (define-splicing-syntax-class variable-clause
@@ -415,14 +450,13 @@
     (pattern (~seq (~or (~datum for) (~datum as)) ~! v
 		   x-for:for-as-subclause
 		   (~seq (~datum and) ~! vv xs:for-as-subclause) ...)
-	 #:with (yy ...) (generate-temporaries (cons #'v #'(vv ...)))
 	 #:with (y  ...) (cons #'v #'(vv ...))
 	 #:with ((qq ...) (ss ...) (zz ...))
 	 (pattern->vars (cons #'v #'(vv ...)))
 
 	 #:attr init 
 	 (lambda (cc) 
-	   #`(let ((zz #f) ...)
+	   #`(let ((zz #f) ... (ss #f) ...)
 	       #,(1-apply (map (lambda (x v) (x v))
 			       (cons x-for.init xs.init) 
 			       #'(y  ...))
@@ -800,13 +834,15 @@
 	     #,(nm.code
 		(1-apply (append v.init m.init (reverse 
 						(fluid-ref *initially*)))
-		   #`(with-finally 
-		      (with-start		       
-		       (let loop ((Start #t))
-			 #,(1-apply (append v.body m.body)
-				    (1-apply v.inc #'(loop #f)))))
+		   #`(with-finally
+		      (with-it
+		       (let ((it #f))
+		        (with-start		       			 
+		         (let loop ((Start #t))
+			  #,(1-apply (append v.body m.body)
+				     (1-apply v.inc #'(loop #f)))))))
 
-		      (let ((ret #,(1-apply m.end #f)))
+		      (let ((ret #,(1-apply (append v.end m.end) #'(if #f #f))))
 			#,(1-apply (reverse (fluid-ref *finally*))
 				   #'ret)))))))))))
 

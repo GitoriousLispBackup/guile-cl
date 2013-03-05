@@ -3,4 +3,22 @@ Library for guile-2.0
 Add this directory to the load-path in guile
 
 The utilities defined in thes package are
-* (compat cl for) - depends on guile-syntax-parse
+* (compat cl loop) - depends on guile-syntax-parse
+
+* The symbols that are exported are
+  debug-loop  : use this when you dont understand the loop syntax error
+  loop        : that actual cl loop
+  return      : cl's return feature
+  return-from : cl's return-from feature
+  it          : cl loop it symbol e.g. it's possible to use it in all expression
+
+* Destructuring is done with ice-9 match and if one keep out of using the 
+  keywords in ice-9 match, everything would be as in CL's loop.
+
+* It's possible do add an extension to the loop.scm that destructs exactly as 
+  in ice-9 match e.g. in (loop for (x y) in l collect x), at a missmatch the 
+  next on will be tried until the whole l has been searched, one can add a 
+  condition for it to signal an error if there is a missmatch and so on. Poke 
+  me to fix that if you are intereted.
+
+
