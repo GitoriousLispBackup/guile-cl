@@ -3,9 +3,14 @@ Library for guile-2.0
 Add this directory to the load-path in guile
 
 The utilities defined in thes package are
-* (compat cl loop) - depends on guile-syntax-parse
+* (compat cl loop) - depends on 
+  i) guile-syntax-parse : https://gitorious.org/guile-syntax-parse
+  i) guile-coroutines   : https://gitorious.org/guile-coroutines
 
-* The symbols that are exported are
+* The CL concept that are ported to the scheme environment are
+  loop tagbody block and symbol-properties
+
+* The symbols that are exported in loop are
   debug-loop  : use this when you dont understand the loop syntax error
   loop        : that actual cl loop
   return      : cl's return feature
