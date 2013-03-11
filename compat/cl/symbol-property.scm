@@ -10,6 +10,7 @@
      ii) Bounded symbols will be treated to their bounded placeholder
   3. symbol identities will just be symbols and there might be confusion if
      the same symbol is used in different modules.
+  4. This implementation is not thread safe.
 |#
 
 (define (ran stx nm)
@@ -25,7 +26,7 @@
 	    (number->string (random 36) 36)
 	    (number->string (random 36) 36))))
 
-(define wmake-table make-weak-free-id-table)
+(define wmake-table make-weak-bound-id-table)
 (define wref        weak-free-id-table-ref)
 (define wset!       weak-free-id-table-set!)
 
