@@ -12,6 +12,19 @@
      the same symbol is used in different modules.
 |#
 
+(define (ran stx nm)
+  (define N 1000000000000)
+  (let ((s   (modulo (* (hash stx N) (random N))
+		     N)))
+    (set! *random-state* (seed->random-state s))
+    (format #f "~a-~a~a~a~a~a~a" nm 
+	    (number->string (random 36) 36)
+	    (number->string (random 36) 36)
+	    (number->string (random 36) 36)
+	    (number->string (random 36) 36)
+	    (number->string (random 36) 36)
+	    (number->string (random 36) 36))))
+
 (define wmake-table make-weak-free-id-table)
 (define wref        weak-free-id-table-ref)
 (define wset!       weak-free-id-table-set!)
@@ -20,7 +33,7 @@
 (define-syntax get-var 
   (lambda (stx)    
     (let* ((module (resolve-module (cdr (vector-ref stx 3))))
-	   (v      (gensym "sref"))
+	   (v      (gensym (ran stx 'sym-props)))
 	   (s      (datum->syntax stx v)))
       (let ((r (wref symbol-table stx #f)))
 	(with-syntax (((s code)
