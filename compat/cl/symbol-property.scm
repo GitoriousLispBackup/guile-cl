@@ -2,15 +2,41 @@
   #:use-module (syntax id-table)
   #:export (get put remprop))
 
+(define (thin-stx stx)  
+  (let* ((sym (syntax->datum stx))
+	 (rib (let loop ((ribs (reverse (vector-ref stx 2))))
+		(if (pair? ribs)
+		    (let ((rib (car ribs)))
+		      (if (vector? rib)
+			  (if (member sym (vector-ref rib 1))
+			      (vector-ref rib 3)
+			      (loop (cdr ribs)))
+			  '()))
+		    '())))
+	 (dir  (cdr (vector-ref stx 3))))
+    (if (keyword? sym)
+	sym
+	(if (null? rib)	    
+	    (let ((v (catch #t
+			    (lambda () (module-ref (resolve-module dir) sym))
+			    (lambda x #f))))
+	      (if v
+		  v
+		  (list sym dir)))
+	    rib))))
+
 #|
   This system, deviates a little from common lisp and is closer to scheme
-  1. this system is _much_ slower then CL
-  2. the symbols are hashed to their syntax identity this means
-     i)  Unbounded symbols will be treated as the same independent of module
-     ii) Bounded symbols will be treated to their bounded placeholder
-  3. symbol identities will just be symbols and there might be confusion if
-     the same symbol is used in different modules.
-  4. This implementation is not thread safe.
+  1. this system is almost as dast as CL
+  2. the symbols are hashed to their syntax identity in some dynamic way
+     this means
+     i)   Toplevel bound variables will be cashed to the current symbol 
+          variable identity if it exists at compile time.
+     ii)  Toplevel variables that cannot be connected to a variable is maped
+          to (sym dir)
+     ii)  Local Bounded symbols will be treated to their bounded placeholder
+     iii) Keywords are treated literally
+  3. This implementation is not thread safe.
 |#
 
 (define (ran stx nm)
@@ -26,9 +52,15 @@
 	    (number->string (random 36) 36)
 	    (number->string (random 36) 36))))
 
-(define wmake-table make-weak-bound-id-table)
-(define wref        weak-free-id-table-ref)
-(define wset!       weak-free-id-table-set!)
+;(define wmake-table make-weak-bound-id-table)
+(define reftable (make-weak-value-hash-table))
+(define wmake-table make-weak-key-hash-table)
+(define wref  (lambda* (tab k #:optional (fail #f))
+		       (hash-ref tab (thin-stx k) fail)))
+(define wset! (lambda (tab k v)
+		(let ((kk (thin-stx k)))
+		  (hash-set! reftable kk (syntax->datum k))
+		  (hash-set! tab kk v))))
 
 (define symbol-table (wmake-table))
 (define-syntax get-var 
