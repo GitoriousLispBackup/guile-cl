@@ -6,9 +6,17 @@
   (let* ((sym (syntax->datum stx))
 	 (rib (let loop ((ribs (reverse (vector-ref stx 2))))
 		(if (pair? ribs)
-		    (let ((rib (car ribs)))
+		    (let* ((rib    (car ribs))
+			   (v-vars (if (vector? rib)
+				       (vector-ref rib 1)
+				       '()))
+		           (vars   (if (null? v-vars) 
+				       '() 
+				       (if (pair? v-vars)
+					   v-vars
+					   (vector->list v-vars)))))
 		      (if (vector? rib)
-			  (if (member sym (vector-ref rib 1))
+			  (if (member sym vars)
 			      (vector-ref rib 3)
 			      (loop (cdr ribs)))
 			  '()))
@@ -64,31 +72,31 @@
 
 (define symbol-table (wmake-table))
 (define-syntax get-var 
-  (lambda (stx)    
-    (let* ((module (resolve-module (cdr (vector-ref stx 3))))
-	   (v      (gensym (ran stx 'sym-props)))
-	   (s      (datum->syntax stx v)))
-      (let ((r (wref symbol-table stx #f)))
+  (lambda (stx)
+    (syntax-case stx ()
+      ((_ stx)
+       (let* ((module (resolve-module '(compat cl symbol-property)))
+	      (v      (gensym (ran #'stx 'sym-props)))
+	      (s      (datum->syntax #'stx v)))
+      (let ((r (wref symbol-table #'stx #f)))
 	(with-syntax (((s code)
 	(if r 
 	    (list r #f)
 	    (begin
 	      (module-define! module v '(symbols-properties))
-	      (wset! symbol-table stx s)
+	      (wset! symbol-table #'stx s)
 	      (list s 
-		    (with-syntax ((stx stx)
+		    (with-syntax ((stx #'stx)
 				  (s   s))
 			  #`(let ((module (resolve-module 
-					   '#,(datum->syntax
-					       #'1 
-					       (cdr (vector-ref #'stx 3))))))
+					   '(compat cl symbol-property))))
 			  
 			      (module-define! module 's '(symbols-properties))
 			      (wset symbol-table #'stx #'s))))))))
 
 	#'(begin
 	    (eval-when (load) code)
-	    s))))))
+	    (@@ (compat cl symbol-property) s)))))))))
     
 (define (_get s i d)
   (let ((r (assoc i (cdr s))))
