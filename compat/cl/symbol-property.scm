@@ -1,5 +1,5 @@
 (define-module (compat cl symbol-property)
-  #:use-module (syntax id-table)
+  #:use-module (srfi srfi-69)
   #:export (get put remprop))
 
 (define (thin-stx stx)  
@@ -60,17 +60,19 @@
 	    (number->string (random 36) 36)
 	    (number->string (random 36) 36))))
 
-;(define wmake-table make-weak-bound-id-table)
-(define reftable (make-weak-value-hash-table))
-(define wmake-table make-weak-key-hash-table)
-(define wref  (lambda* (tab k #:optional (fail #f))
-		       (hash-ref tab (thin-stx k) fail)))
-(define wset! (lambda (tab k v)
-		(let ((kk (thin-stx k)))
-		  (hash-set! reftable kk (syntax->datum k))
-		  (hash-set! tab kk v))))
+(define (e? x y)
+  (if (or (variable? x) (variable? y))
+      (eq?    x y)
+      (equal? x y)))
 
-(define symbol-table (wmake-table))
+;(define wmake-table make-weak-bound-id-table)
+(define symbol-table (make-hash-table e?))
+(define wref  (lambda* (k #:optional (fail #f))
+		       (hash-table-ref/default symbol-table (thin-stx k) fail)))
+(define wset! (lambda (k v)
+		(let ((kk (thin-stx k)))
+		  (hash-table-set! symbol-table kk v))))
+
 (define-syntax get-var 
   (lambda (stx)
     (syntax-case stx ()
@@ -78,21 +80,22 @@
        (let* ((module (resolve-module '(compat cl symbol-property)))
 	      (v      (gensym (ran #'stx 'sym-props)))
 	      (s      (datum->syntax #'stx v)))
-      (let ((r (wref symbol-table #'stx #f)))
+      (let ((r (wref #'stx #f)))
 	(with-syntax (((s code)
 	(if r 
 	    (list r #f)
 	    (begin
-	      (module-define! module v '(symbols-properties))
-	      (wset! symbol-table #'stx s)
+	      (module-define! module v (list 'symbols-properties))
+	      (wset! #'stx s)
 	      (list s 
 		    (with-syntax ((stx #'stx)
 				  (s   s))
 			  #`(let ((module (resolve-module 
 					   '(compat cl symbol-property))))
 			  
-			      (module-define! module 's '(symbols-properties))
-			      (wset symbol-table #'stx #'s))))))))
+			      (module-define! module 's 
+					      (list 'symbols-properties))
+			      (wset #'stx #'s))))))))
 
 	#'(begin
 	    (eval-when (load) code)
