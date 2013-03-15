@@ -1,10 +1,9 @@
 (define-module (compat cl block)
-  #:use-module ((stis coroutine)
-		#:select ((with-coroutines . with)
-			  (yield           . return)
-			  (yield-from      . return-from)))
-  #:export (block)
-  #:re-export (return return-from))
+  #:use-module (stis coroutine)
+  #:export (block return return-from))
+
+(define-syntax-rule  (return . l)      (leave . l))
+(define-syntax-rule  (return-from . l) (leave-from . l))
 
 (define-syntax block
   (syntax-rules ()

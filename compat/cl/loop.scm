@@ -1,8 +1,10 @@
 (define-module (compat cl loop)
+  #:use-module (compat cl block)
   #:use-module (syntax parse)
   #:use-module (syntax parse debug)
   #:use-module (ice-9 match)
-  #:export     (debug-loop loop return return-from it))
+  #:export     (debug-loop loop it)
+  #:re-export (return return-from))
 
 (define-syntax-parameter *list-end-test* 
   (syntax-rules () ((_ x) (pair? x))))
@@ -86,22 +88,6 @@
     (lambda () x)
     (lambda y (fail))))
 
-;; return utility
-(define tag (make-prompt-tag))
-(define-syntax-parameter S (lambda x #'tag))
-(define-syntax-rule (return . l)
-  (abort-to-prompt S . l))
-(define-syntax-rule (return-from S . l)
-  (abort-to-prompt S . l))
-(define-syntax-rule (with-return code codef)
-  (syntax-parameterize 
-   ((S (lambda (x) (with-syntax ((s (datum->syntax #'1 
-						   (gensym "return-prompt"))))
-		     #''s))))
-   (call-with-prompt S
-      (lambda () code)
-      (lambda x  codef))))
-
 ;; it utilitiy
 (define-syntax-parameter it 
   (lambda x (error "compat cl loop it cannot be used outside loop")))
@@ -157,21 +143,10 @@
     (pattern (~seq (~optional (~seq (~datum named) ~! name)) ...)
       #:attr code 
       (lambda (cc)
-	(if name
-	    (with-syntax ((name name))
-	       #`(let ((name (make-prompt-tag)))
-		   (syntax-parameterize ((S (lambda z #'name)))
-		     (call-with-prompt S
-			(lambda () #,cc)
-			(lambda (k . l) 
-			  (when (null? l) (set! l (list #f)))
-			  (apply values l))))))
-
-	    #`(call-with-prompt tag
-		 (lambda () #,cc)
-		 (lambda (k . l) 
-		   (when (null? l) (set! l (list #f)))
-		   (apply values l)))))))
+	(with-syntax ((name (if name 
+				name
+				(stx-gen #'1 "block"))))
+	    #`(block name #,cc)))))
 
   (define-splicing-syntax-class main-clause
     (pattern (~or x:termination-test
@@ -199,7 +174,7 @@
 			     ((do doing)
 			      #`(begin xx ... #,cc))
 			     ((return)
-			      #`(return-from S ff2))))
+			      #`(return ff2))))
 	     #:attr inc  (lambda (cc) cc)
 	     #:attr end  (lambda (x) x)))
 
@@ -375,11 +350,11 @@
 				(begin (set! i (+ i 1)) #,cc) 
 				(finish)))
 			 ((always)
-			  #`(let ((it f1)) (if it #,cc (return-from S #f))))
+			  #`(let ((it f1)) (if it #,cc (return #f))))
 			 ((never)
-			  #`(let ((it f1)) (if it (return-from S #f) #,cc)))
+			  #`(let ((it f1)) (if it (return #f) #,cc)))
 			 ((thereis)
-			  #`(let ((it f1)) (if it (return-from S it) #,cc)))))
+			  #`(let ((it f1)) (if it (return it) #,cc)))))
 
 	 #:attr inc  (lambda (cc) cc)
 	 #:attr end  (lambda (cc)
